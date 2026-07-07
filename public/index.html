@@ -1,0 +1,435 @@
+ <!DOCTYPE html>
+ <html lang="en">
+ <head>
+ <meta charset="UTF-8">
+ <meta name="viewport" content="width=device-width, initial-scale=1.0">
+ <title>Steam Profile Stats</title>
+ <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='28' font-size='28'>🎮</text></svg>">
+ <style>
+   *, *::before, *::after {
+     box-sizing: border-box;
+     margin: 0;
+     padding: 0;
+   }
+   body {
+     font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+     background: linear-gradient(135deg, #0b0f1a 0%, #141b2d 50%, #1a1a2e 100%);
+     color: #c9d1d9;
+     min-height: 100vh;
+     display: flex;
+     flex-direction: column;
+     align-items: center;
+   }
+ 
+   /* ─── Header ──────────────────────────────────── */
+   header {
+     text-align: center;
+     padding: 48px 24px 24px;
+     width: 100%;
+     max-width: 640px;
+   }
+   header h1 {
+     font-size: 36px;
+     font-weight: 800;
+     color: #ffffff;
+     letter-spacing: -0.5px;
+   }
+   header h1 span {
+     background: linear-gradient(135deg, #1991ff, #4facfe);
+     -webkit-background-clip: text;
+     -webkit-text-fill-color: transparent;
+     background-clip: text;
+   }
+   header p {
+     margin-top: 10px;
+     font-size: 16px;
+     color: #8b949e;
+     line-height: 1.5;
+   }
+ 
+   /* ─── Main card ───────────────────────────────── */
+   .container {
+     width: 100%;
+     max-width: 600px;
+     padding: 0 24px 48px;
+   }
+ 
+   .panel {
+     background: rgba(255,255,255,0.04);
+     border: 1px solid rgba(255,255,255,0.08);
+     border-radius: 14px;
+     padding: 28px 24px;
+     backdrop-filter: blur(8px);
+     -webkit-backdrop-filter: blur(8px);
+   }
+ 
+   .panel + .panel {
+     margin-top: 20px;
+   }
+ 
+   .panel h2 {
+     font-size: 16px;
+     font-weight: 600;
+     color: #ffffff;
+     margin-bottom: 16px;
+   }
+ 
+   /* ─── Input row ───────────────────────────────── */
+   .input-row {
+     display: flex;
+     gap: 10px;
+   }
+ 
+   .input-row input {
+     flex: 1;
+     padding: 12px 16px;
+     border-radius: 8px;
+     border: 1px solid rgba(255,255,255,0.12);
+     background: rgba(255,255,255,0.06);
+     color: #ffffff;
+     font-size: 15px;
+     outline: none;
+     transition: border-color 0.2s, box-shadow 0.2s;
+   }
+   .input-row input::placeholder {
+     color: #484f58;
+   }
+   .input-row input:focus {
+     border-color: #1991ff;
+     box-shadow: 0 0 0 3px rgba(25,145,255,0.15);
+   }
+ 
+   .btn {
+     padding: 12px 24px;
+     border-radius: 8px;
+     border: none;
+     background: linear-gradient(135deg, #1991ff, #4facfe);
+     color: #ffffff;
+     font-size: 15px;
+     font-weight: 600;
+     cursor: pointer;
+     transition: transform 0.15s, box-shadow 0.15s, opacity 0.15s;
+     white-space: nowrap;
+   }
+   .btn:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(25,145,255,0.3); }
+   .btn:active { transform: translateY(0); opacity: 0.85; }
+   .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
+ 
+  /* ─── Theme toggle ────────────────────────────── */
+  .theme-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  select.theme-select {
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.12);
+    background: rgba(255,255,255,0.06);
+    color: #ffffff;
+    font-size: 14px;
+    cursor: pointer;
+    outline: none;
+    min-width: 130px;
+  }
+  select.theme-select option {
+    background: #1a1a2e;
+    color: #c9d1d9;
+  }
+  select.theme-select:focus {
+    border-color: #1991ff;
+  }
+  .anim-switch {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    color: #8b949e;
+    user-select: none;
+    margin-left: auto;
+  }
+  .anim-switch input { position:absolute; opacity:0; width:0; height:0; }
+  .anim-switch .slider {
+    position:relative; width:34px; height:18px;
+    background: rgba(255,255,255,0.1);
+    border-radius: 9px; transition: background .2s;
+  }
+  .anim-switch .slider::before {
+    content:''; position:absolute; width:14px; height:14px;
+    left:2px; top:2px; background:#8b949e;
+    border-radius:50%; transition: transform .2s, background .2s;
+  }
+  .anim-switch input:checked + .slider { background:#1991ff; }
+  .anim-switch input:checked + .slider::before {
+    transform: translateX(16px); background:#fff;
+  }
+ 
+   /* ─── Preview ─────────────────────────────────── */
+   .preview-area {
+     display: flex;
+     justify-content: center;
+     min-height: 100px;
+     align-items: center;
+   }
+   .preview-area img {
+     max-width: 100%;
+     height: auto;
+     border-radius: 10px;
+   }
+   .placeholder-msg {
+     color: #484f58;
+     font-size: 14px;
+   }
+ 
+   /* ─── Embed code ──────────────────────────────── */
+   .code-row {
+     display: flex;
+     gap: 8px;
+   }
+   .code-row code {
+     flex: 1;
+     padding: 12px 14px;
+     border-radius: 8px;
+     background: rgba(0,0,0,0.3);
+     border: 1px solid rgba(255,255,255,0.08);
+     font-family: 'SF Mono', 'JetBrains Mono', 'Consolas', monospace;
+     font-size: 13px;
+     color: #c9d1d9;
+     overflow-x: auto;
+     white-space: nowrap;
+     user-select: all;
+   }
+   .btn-copy {
+     padding: 12px 18px;
+     border-radius: 8px;
+     border: none;
+     background: rgba(255,255,255,0.08);
+     color: #c9d1d9;
+     font-size: 13px;
+     cursor: pointer;
+     transition: background 0.2s;
+     white-space: nowrap;
+   }
+   .btn-copy:hover { background: rgba(255,255,255,0.14); }
+   .btn-copy.copied { background: #238636; color: #ffffff; }
+ 
+   /* ─── Footer ──────────────────────────────────── */
+   footer {
+     text-align: center;
+     padding: 24px;
+     color: #484f58;
+     font-size: 13px;
+   }
+   footer a {
+     color: #8b949e;
+     text-decoration: none;
+   }
+   footer a:hover { color: #1991ff; }
+ 
+   /* ─── Loading ─────────────────────────────────── */
+   .spinner {
+     width: 28px;
+     height: 28px;
+     border: 3px solid rgba(255,255,255,0.08);
+     border-top-color: #1991ff;
+     border-radius: 50%;
+     animation: spin 0.8s linear infinite;
+   }
+   @keyframes spin { to { transform: rotate(360deg); } }
+ 
+   /* ─── Responsive ──────────────────────────────── */
+   @media (max-width: 520px) {
+     header { padding: 32px 16px 16px; }
+     header h1 { font-size: 28px; }
+     .container { padding: 0 16px 32px; }
+     .panel { padding: 20px 16px; }
+     .input-row { flex-direction: column; }
+     .code-row { flex-direction: column; }
+   }
+ </style>
+ </head>
+ <body>
+ 
+ <header>
+   <h1>Steam <span>Stats</span></h1>
+   <p>Generate a dynamic Steam profile card for your GitHub README. Enter your Steam ID or custom URL below.</p>
+ </header>
+ 
+ <main class="container">
+   <!-- Input panel -->
+   <div class="panel">
+     <h2>Your Steam Profile</h2>
+     <div class="input-row">
+       <input type="text" id="inputField" placeholder="Steam ID or vanity URL (e.g. 76561197960435530 or anuraghazra)" spellcheck="false" autofocus>
+       <button class="btn" id="generateBtn">Generate</button>
+     </div>
+     <p style="margin-top:10px; font-size:13px; color:#484f58;">
+       Your Steam ID is the number in your profile URL, or use your community name.
+     </p>
+   </div>
+ 
+   <!-- Preview panel -->
+   <div class="panel" id="previewPanel">
+      <div class="theme-row">
+        <label>Theme:</label>
+        <select class="theme-select" id="themeSelect">
+          <option value="dark" selected>Dark</option>
+          <option value="light">Light</option>
+          <option value="radical">Radical</option>
+          <option value="gruvbox">Gruvbox</option>
+          <option value="tokyonight">Tokyo Night</option>
+          <option value="onedark">One Dark</option>
+          <option value="merko">Merko</option>
+          <option value="cobalt">Cobalt</option>
+          <option value="synthwave">Synthwave</option>
+          <option value="dracula">Dracula</option>
+          <option value="monokai">Monokai</option>
+          <option value="nord">Nord</option>
+          <option value="highcontrast">High Contrast</option>
+          <option value="react">React</option>
+          <option value="rose">Rose</option>
+          <option value="gotham">Gotham</option>
+        </select>
+        <label class="anim-switch">
+          Animate
+          <input type="checkbox" id="animToggle" checked>
+          <span class="slider"></span>
+        </label>
+      </div>
+     <div class="preview-area" id="previewArea">
+       <span class="placeholder-msg">Enter your Steam ID and click Generate</span>
+     </div>
+   </div>
+ 
+   <!-- Embed panel -->
+   <div class="panel">
+     <h2>Embed in GitHub README</h2>
+     <div class="code-row">
+       <code id="embedCode">Generate a card first</code>
+       <button class="btn-copy" id="copyBtn">Copy</button>
+     </div>
+   </div>
+ </main>
+ 
+ <footer>
+   Powered by <a href="https://steamcommunity.com/dev/apikey" target="_blank">Steam Web API</a> &middot;
+   <a href="https://github.com/stats-organization/github-stats-extended" target="_blank">Inspired by GitHub Stats Extended</a>
+ </footer>
+ 
+ <script>
+   (function() {
+     const inputField = document.getElementById('inputField');
+     const generateBtn = document.getElementById('generateBtn');
+     const previewArea = document.getElementById('previewArea');
+     const embedCode = document.getElementById('embedCode');
+     const copyBtn = document.getElementById('copyBtn');
+     const themeSelect = document.getElementById('themeSelect');
+ 
+     let currentTheme = 'dark';
+     let lastParam = '';
+     let isGenerating = false;
+     const animToggle = document.getElementById('animToggle');
+     let disableAnimations = false;
+ 
+     // ─── Theme toggle ───────────────────────────────
+     themeSelect.addEventListener('change', () => {
+       currentTheme = themeSelect.value;
+       if (lastParam) generateCard(lastParam, true);
+     });
+
+     animToggle.addEventListener('change', () => {
+       disableAnimations = !animToggle.checked;
+       if (lastParam) generateCard(lastParam, true);
+     });
+ 
+     // ─── Generate card ──────────────────────────────
+     async function generateCard(value, isRetheme) {
+       const trimmed = value.trim();
+       if (!trimmed) return;
+ 
+       lastParam = trimmed;
+       isGenerating = true;
+ 
+       if (!isRetheme) {
+         previewArea.innerHTML = '<div class="spinner"></div>';
+         embedCode.textContent = 'Generating...';
+       }
+ 
+       // Determine whether it's a steamid (numeric) or vanity URL
+       const paramName = /^\d{17}$/.test(trimmed) ? 'steamid' : 'username';
+       const cb = Date.now();
+       const url = `/api/card?${paramName}=${encodeURIComponent(trimmed)}&theme=${currentTheme}&disable_animations=${disableAnimations}&_=${cb}`;
+ 
+       // Build embed markdown
+       const baseUrl = window.location.origin;
+       const fullUrl = `${baseUrl}/api/card?${paramName}=${encodeURIComponent(trimmed)}&theme=${currentTheme}&disable_animations=${disableAnimations}&_=${cb}`;
+       const isSteamId = /^\d{17}$/.test(trimmed);
+       const profileUrl = isSteamId ? `https://steamcommunity.com/profiles/${trimmed}` : `https://steamcommunity.com/id/${trimmed}`;
+       const md = `[![Steam Stats](${fullUrl})](${profileUrl})`;
+       embedCode.textContent = md;
+ 
+      if (!isRetheme) {
+        const img = document.createElement('img');
+        img.src = url;
+        img.alt = 'Steam Profile Stats';
+        img.onerror = () => {
+          previewArea.innerHTML = '<span class="placeholder-msg" style="color:#f85149;">Failed to load. Check your Steam ID and try again.</span>';
+        };
+        img.onload = () => {
+          previewArea.innerHTML = '';
+          previewArea.appendChild(img);
+        };
+        isGenerating = false;
+        return;
+      }
+      // Retheme: just swap the src on the existing img
+      const existingImg = previewArea.querySelector('img');
+      if (existingImg) existingImg.src = url;
+      isGenerating = false;
+     }
+ 
+     // ─── Copy embed code ────────────────────────────
+     copyBtn.addEventListener('click', async () => {
+       const code = embedCode.textContent;
+       if (!code || code === 'Generate a card first' || code === 'Generating...') return;
+ 
+       try {
+         await navigator.clipboard.writeText(code);
+         copyBtn.textContent = 'Copied!';
+         copyBtn.classList.add('copied');
+         setTimeout(() => {
+           copyBtn.textContent = 'Copy';
+           copyBtn.classList.remove('copied');
+         }, 2000);
+       } catch {
+         // Fallback
+         const range = document.createRange();
+         range.selectNodeContents(embedCode);
+         const sel = window.getSelection();
+         sel.removeAllRanges();
+         sel.addRange(range);
+       }
+     });
+ 
+     // ─── Generate on button click / Enter key ──────
+     generateBtn.addEventListener('click', () => generateCard(inputField.value));
+     inputField.addEventListener('keydown', (e) => {
+       if (e.key === 'Enter') generateCard(inputField.value);
+     });
+ 
+     // ─── Auto-generate from URL params ─────────────
+     (function initFromUrl() {
+       const params = new URLSearchParams(window.location.search);
+       const val = params.get('steamid') || params.get('username');
+       if (val) {
+         inputField.value = val;
+         generateCard(val);
+       }
+     })();
+   })();
+ </script>
+ 
+ </body>
+ </html>

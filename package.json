@@ -1,0 +1,13 @@
+ {
+   "name": "steam-profile-stats",
+   "version": "1.0.0",
+   "type": "module",
+   "description": "Dynamically generate Steam profile stats cards for your GitHub README.",
+   "scripts": {
+     "start": "vercel dev",
+     "deploy": "vercel --prod"
+   },
+   "engines": {
+     "node": ">=18.0.0"
+   }
+ }

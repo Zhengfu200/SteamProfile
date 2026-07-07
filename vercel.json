@@ -1,0 +1,7 @@
+ {
+   "functions": {
+     "api/card.js": {
+       "maxDuration": 10
+     }
+   }
+ }
