@@ -207,86 +207,95 @@ async function fetchAvatarAsBase64(url) {
  
  function renderErrorSvg(message, theme = 'dark') {
    const t = THEMES[theme] || THEMES.dark;
-   return `<svg xmlns="http://www.w3.org/2000/svg" width="495" height="120">
-   <rect width="495" height="120" rx="10" fill="${t.cardBg}" stroke="${t.border}" stroke-width="1"/>
-   <text x="247" y="55" fill="${t.muted}" font-family="system-ui,-apple-system,sans-serif" font-size="14" text-anchor="middle">${escapeXml(message)}</text>
-   <text x="247" y="95" fill="${t.footer}" font-family="system-ui,-apple-system,sans-serif" font-size="10" text-anchor="middle">Click to visit profile</text>
+   return `<svg xmlns="http://www.w3.org/2000/svg" width="340" height="120">
+   <rect width="495" height="120" rx="14" fill="${t.cardBg}" stroke="${t.border}" stroke-width="1"/>
+   <text x="170" y="55" fill="${t.muted}" font-family="system-ui,-apple-system,sans-serif" font-size="14" text-anchor="middle">${escapeXml(message)}</text>
+   <text x="170" y="95" fill="${t.footer}" font-family="system-ui,-apple-system,sans-serif" font-size="10" text-anchor="middle">Click to visit profile</text>
  </svg>`;
  }
  
  function renderCardSvg(data, theme) {
   const t = THEMES[theme] || THEMES.dark;
-  const { name, avatarUrl, level, gameCount, totalMinutes, disableAnimations } = data;
+  const { name, avatarUrl, level, gameCount, totalMinutes, disableAnimations,
+    showGames, showHours, showJoined, showLocation, joinedYear, locCountry } = data;
   const noAnim = disableAnimations === true;
 
-  const W = 495;
-  const H = 215;
-
-  const ax = 68, ay = 60, ar = 38;
-  const lx = 125;
-
-  const badgeW = Math.max(64, Math.min(100, level.toString().length * 8 + 42));
-  const username = truncate(name || "Unknown", 26);
+  const W = 340;
+  const ax = 68, ay = 48, ar = 24;
+  const lx = 99, statGap = 22, colGap = 105;
+  const badgeW = Math.max(58, Math.min(90, level.toString().length * 8 + 36));
+  const username = truncate(name || "Unknown", 18);
   const hoursTotal = formatHours(totalMinutes);
   const hasPlaytime = totalMinutes > 0;
   const gameCountStr = gameCount.toLocaleString();
+  const hoursStr = hasPlaytime ? hoursTotal + " hrs" : "---";
+
+  const items = [];
+  if (showGames !== false) items.push({ icon: "&#x1F3AE;", val: gameCountStr, label: "GAMES" });
+  if (showHours !== false) items.push({ icon: "&#x23F1;", val: hoursStr, label: "HOURS" });
+  if (showJoined === true && joinedYear) items.push({ icon: "&#x1F4C5;", val: joinedYear, label: "JOINED" });
+  if (showLocation === true && locCountry) items.push({ icon: "&#x1F30D;", val: locCountry, label: "COUNTRY" });
+
+  const rows = Math.ceil(items.length / 2);
+  const baseY = 102, rowH = 48, lblOff = 15, padAfter = 18;
+  let divY, footY, H;
+  if (rows === 0) {
+    divY = 118; footY = 139; H = 145;
+  } else {
+    const lastLabelY = baseY + (rows - 1) * rowH + lblOff;
+    divY = lastLabelY + padAfter;
+    footY = divY + 21;
+    H = footY + 12;
+  }
+
+  let statsHtml = "";
+  items.forEach((it, i) => {
+    const col = i % 2, row = Math.floor(i / 2);
+    const x = lx + col * colGap, y = baseY + row * rowH;
+    statsHtml += `
+    <text x="${x}" y="${y}" fill="${t.accent}" font-size="14">${it.icon}</text>
+    <text x="${x + statGap}" y="${y}" fill="${t.title}" font-size="16" font-weight="700">${it.val}</text>
+    <text x="${x}" y="${y + lblOff}" fill="${t.muted}" font-size="10" letter-spacing="0.5">${it.label}</text>`;
+  });
 
   const animCss = noAnim ? "" : `<style>
     @keyframes af{from{opacity:0}to{opacity:1}}
-    @keyframes as{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
-    @keyframes asc{from{opacity:0;transform:scale(.8)}to{opacity:1;transform:scale(1)}}
-    .af{animation:af .6s ease forwards;opacity:0}
-    .as{animation:as .5s ease forwards;opacity:0}
-    .asc{animation:asc .5s ease forwards;opacity:0}
+    @keyframes as{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+    @keyframes asc{from{opacity:0;transform:scale(.9)}to{opacity:1;transform:scale(1)}}
+    .af{animation:af .5s ease forwards;opacity:0}
+    .as{animation:as .4s ease forwards;opacity:0}
+    .asc{animation:asc .4s ease forwards;opacity:0}
   </style>`;
 
   return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${W}" height="${H}">
   ${animCss}
   <defs>
-    <clipPath id="avatarClip">
-      <circle cx="${ax}" cy="${ay}" r="${ar}"/>
-    </clipPath>
+    <clipPath id="avatarClip"><circle cx="${ax}" cy="${ay}" r="${ar}"/></clipPath>
     <linearGradient id="accentGrad" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="${t.accent}"/>
       <stop offset="100%" stop-color="${t.barLeft || t.accent}"/>
     </linearGradient>
-    <linearGradient id="topBar" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="${t.barLeft || t.accent}"/>
-      <stop offset="100%" stop-color="${t.barRight || t.accent}"/>
-    </linearGradient>
   </defs>
 
-  <rect class="af" width="${W}" height="${H}" rx="12" fill="${t.cardBg}" stroke="${t.border}" stroke-width="1"/>
-  <g class="af" style="animation-delay:0.05s">
-    <rect width="${W}" height="4" rx="12" fill="url(#topBar)"/>
-    <rect y="2" width="${W}" height="2" fill="url(#topBar)"/>
-  </g>
+  <rect class="af" width="${W}" height="${H}" rx="14" fill="${t.cardBg}" stroke="${t.border}" stroke-width="1"/>
 
-  <g class="asc" style="animation-delay:0.1s">
-    <circle cx="${ax}" cy="${ay}" r="${ar + 3}" fill="none" stroke="${t.accent}" stroke-width="2" opacity="0.35"/>
-    <circle cx="${ax}" cy="${ay}" r="${ar}" fill="none" stroke="${t.accent}" stroke-width="2.5"/>
+  <g class="asc" style="animation-delay:0.08s">
+    <circle cx="${ax}" cy="${ay}" r="${ar + 2}" fill="none" stroke="${t.accent}" stroke-width="1.5" opacity="0.3"/>
+    <circle cx="${ax}" cy="${ay}" r="${ar}" fill="none" stroke="${t.accent}" stroke-width="2"/>
     <image x="${ax - ar}" y="${ay - ar}" width="${ar * 2}" height="${ar * 2}" clip-path="url(#avatarClip)" href="${escapeXml(avatarUrl)}" xlink:href="${escapeXml(avatarUrl)}" preserveAspectRatio="xMidYMid slice"/>
   </g>
 
-  <text class="as" style="animation-delay:0.15s" x="${lx}" y="46" fill="${t.title}" font-family="system-ui,-apple-system,sans-serif" font-size="21" font-weight="700" letter-spacing="-0.3">${escapeXml(username)}</text>
+  <text class="as" style="animation-delay:0.12s" x="${lx}" y="40" fill="${t.title}" font-family="system-ui,-apple-system,sans-serif" font-size="16" font-weight="700" letter-spacing="-0.3">${escapeXml(username)}</text>
 
-  <g class="as" style="animation-delay:0.2s">
-    <rect x="${lx}" y="56" width="${badgeW}" height="24" rx="12" fill="url(#accentGrad)"/>
-    <text x="${lx + badgeW / 2}" y="72" fill="${t.badgeText}" font-family="system-ui,-apple-system,sans-serif" font-size="11" font-weight="700" text-anchor="middle">LV. ${level}</text>
+  <g class="as" style="animation-delay:0.16s">
+    <rect x="${lx}" y="48" width="${badgeW}" height="18" rx="9" fill="url(#accentGrad)"/>
+    <text x="${lx + badgeW / 2}" y="61" fill="${t.badgeText}" font-family="system-ui,-apple-system,sans-serif" font-size="10" font-weight="700" text-anchor="middle">LV. ${level}</text>
   </g>
 
-  <g class="as" style="animation-delay:0.25s">
-    <text x="${lx}" y="113" fill="${t.accent}" font-size="16">&#x1F3AE;</text>
-    <text x="${lx + 24}" y="114" fill="${t.title}" font-size="19" font-weight="700">${gameCountStr}</text>
-    <text x="${lx}" y="137" fill="${t.muted}" font-size="11" letter-spacing="0.3">GAMES OWNED</text>
+  ${items.length > 0 ? `<g class="as" style="animation-delay:0.2s">${statsHtml}</g>` : ""}
 
-    <text x="${lx + 175}" y="113" fill="${t.accent}" font-size="16">&#x23F1;</text>
-    <text x="${lx + 199}" y="114" fill="${t.title}" font-size="19" font-weight="700">${hasPlaytime ? hoursTotal : "---"}</text>
-    <text x="${lx + 175}" y="137" fill="${t.muted}" font-size="11" letter-spacing="0.3">HOURS PLAYED</text>
-  </g>
-
-  <line class="af" style="animation-delay:0.35s" x1="25" y1="172" x2="${W - 25}" y2="172" stroke="${t.border}" stroke-width="1"/>
-  <text class="af" style="animation-delay:0.4s" x="${W / 2}" y="198" fill="${t.footer}" font-family="system-ui,-apple-system,sans-serif" font-size="10" text-anchor="middle" letter-spacing="1">STEAM STATS</text>
+  <line class="af" style="animation-delay:0.3s" x1="44" y1="${divY}" x2="${W - 44}" y2="${divY}" stroke="${t.border}" stroke-width="1"/>
+  <text class="af" style="animation-delay:0.35s" x="${W / 2}" y="${footY}" fill="${t.footer}" font-family="system-ui,-apple-system,sans-serif" font-size="10" text-anchor="middle" letter-spacing="1">STEAM STATS</text>
 </svg>`;
 }
 export { renderCardSvg, renderErrorSvg };
@@ -344,6 +353,14 @@ export default async function handler(req, res) {
     const avatarSrc = summary.avatarfull || `${STEAM_CDN}/full.jpg`;
     const avatarDataUri = await fetchAvatarAsBase64(avatarSrc);
 
+    const showGames = searchParams.get("show_games") !== "false";
+    const showHours = searchParams.get("show_hours") !== "false";
+    const showJoined = searchParams.get("show_joined") === "true";
+    const showLocation = searchParams.get("show_location") === "true";
+
+    const joinedYear = summary.timecreated ? new Date(summary.timecreated * 1000).getFullYear().toString() : null;
+    const locCountry = summary.loccountrycode || null;
+
     const cardData = {
       name: summary.personaname || "Unknown",
       avatarUrl: avatarDataUri,
@@ -351,6 +368,12 @@ export default async function handler(req, res) {
       gameCount: gamesData.game_count || 0,
       totalMinutes,
       disableAnimations,
+      showGames,
+      showHours,
+      showJoined,
+      showLocation,
+      joinedYear,
+      locCountry,
       steamId: resolvedId,
     };
 

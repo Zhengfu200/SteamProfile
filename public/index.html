@@ -165,6 +165,38 @@
   .anim-switch input:checked + .slider::before {
     transform: translateX(16px); background:#fff;
   }
+  }
+  .opt-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 24px;
+    margin-top: 4px;
+  }
+  .opt-switch {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    cursor: pointer;
+    user-select: none;
+    font-size: 13px;
+    color: #8b949e;
+  }
+  .opt-switch input { position:absolute; opacity:0; width:0; height:0; }
+  .opt-switch .slider {
+    position:relative; width:24px; height:12px;
+    background: rgba(255,255,255,0.1);
+    border-radius:6px; transition:background .2s; flex-shrink:0;
+  }
+  .opt-switch .slider::before {
+    content:""; position:absolute; width:8px; height:8px;
+    left:2px; top:2px; background:#8b949e;
+    border-radius:50%; transition:transform .2s, background .2s;
+  }
+  .opt-switch input:checked + .slider { background:#1991ff; }
+  .opt-switch input:checked + .slider::before {
+    transform: translateX(12px); background:#fff;
+  }
+
  
    /* ─── Preview ─────────────────────────────────── */
    .preview-area {
@@ -303,6 +335,16 @@
      </div>
    </div>
  
+   <div class="panel">
+     <h2>Display Options</h2>
+     <div class="opt-grid">
+       <label class="opt-switch"><input type="checkbox" id="showGames" checked><span class="slider"></span> Games</label>
+       <label class="opt-switch"><input type="checkbox" id="showHours" checked><span class="slider"></span> Hours</label>
+       <label class="opt-switch"><input type="checkbox" id="showJoined" checked><span class="slider"></span> Join Date</label>
+       <label class="opt-switch"><input type="checkbox" id="showLocation" checked><span class="slider"></span> Location</label>
+     </div>
+   </div>
+ 
    <!-- Embed panel -->
    <div class="panel">
      <h2>Embed in GitHub README</h2>
@@ -332,6 +374,10 @@
      let isGenerating = false;
      const animToggle = document.getElementById('animToggle');
      let disableAnimations = false;
+     const sg = document.getElementById('showGames');
+     const sh = document.getElementById('showHours');
+     const sj = document.getElementById('showJoined');
+     const sl = document.getElementById('showLocation');
  
      // ─── Theme toggle ───────────────────────────────
      themeSelect.addEventListener('change', () => {
@@ -343,6 +389,11 @@
        disableAnimations = !animToggle.checked;
        if (lastParam) generateCard(lastParam, true);
      });
+
+     const optToggles = [sg, sh, sj, sl];
+     optToggles.forEach(t => t.addEventListener('change', () => {
+       if (lastParam) generateCard(lastParam, true);
+     }));
  
      // ─── Generate card ──────────────────────────────
      async function generateCard(value, isRetheme) {
@@ -360,11 +411,12 @@
        // Determine whether it's a steamid (numeric) or vanity URL
        const paramName = /^\d{17}$/.test(trimmed) ? 'steamid' : 'username';
        const cb = Date.now();
-       const url = `/api/card?${paramName}=${encodeURIComponent(trimmed)}&theme=${currentTheme}&disable_animations=${disableAnimations}&_=${cb}`;
+       const showParams = `&show_games=${sg.checked}&show_hours=${sh.checked}&show_joined=${sj.checked}&show_location=${sl.checked}`;
+       const url = `/api/card?${paramName}=${encodeURIComponent(trimmed)}&theme=${currentTheme}&disable_animations=${disableAnimations}${showParams}&_=${cb}`;
  
        // Build embed markdown
        const baseUrl = window.location.origin;
-       const fullUrl = `${baseUrl}/api/card?${paramName}=${encodeURIComponent(trimmed)}&theme=${currentTheme}&disable_animations=${disableAnimations}&_=${cb}`;
+       const fullUrl = `${baseUrl}/api/card?${paramName}=${encodeURIComponent(trimmed)}&theme=${currentTheme}&disable_animations=${disableAnimations}${showParams}&_=${cb}`;
        const isSteamId = /^\d{17}$/.test(trimmed);
        const profileUrl = isSteamId ? `https://steamcommunity.com/profiles/${trimmed}` : `https://steamcommunity.com/id/${trimmed}`;
        const md = `[![Steam Stats](${fullUrl})](${profileUrl})`;

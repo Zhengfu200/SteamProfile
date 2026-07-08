@@ -4,3 +4,10 @@
 .DS_Store
 *.log
 dist/
+.vercel
+
+push_github.py
+checkbox_opts.cjs
+test_refine.cjs
+update_frontend2.cjs
+*.svg
