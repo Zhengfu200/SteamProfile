@@ -1,8 +1,8 @@
-﻿import http from "node:http";
+import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { execSync } from "node:child_process";
+import { exec } from "node:child_process";
 
 // Load .env
 const envTxt = fs.readFileSync(".env", "utf8").replace(/\r/g, "");
@@ -25,27 +25,59 @@ const MIME = {
   ".svg": "image/svg+xml",
 };
 
-// Override global fetch to use PowerShell (Node.js fetch can't reach Steam API on this network)
-delete globalThis.fetch;
-globalThis.fetch = async function psFetch(url) {
-  const result = execSync(
-    `powershell -File "${psScript}" -Url "${url}"`,
-    { encoding: "utf-8", maxBuffer: 10 * 1024 * 1024 }
-  );
-  // Handle base64-encoded image responses (IMG_BASE64: prefix)
-  if (result.startsWith("IMG_BASE64:")) {
-    const b64 = result.slice("IMG_BASE64:".length).trim();
-    const dataUri = `data:image/jpeg;base64,${b64}`;
-    const text = () => Promise.resolve(dataUri);
-    const json = async () => { throw new Error("Not a JSON response"); };
-    return { ok: true, status: 200, text, json, headers: new Map(), _isImage: true };
+// ---------- In-memory cache (5 min TTL) ----------
+const CACHE_TTL = 5 * 60 * 1000;
+const cache = new Map();
+function cacheGet(key) {
+  const e = cache.get(key);
+  if (e && Date.now() - e.ts < CACHE_TTL) return e.val;
+  cache.delete(key);
+  return undefined;
+}
+function cacheSet(key, val) { cache.set(key, { ts: Date.now(), val }); }
+
+// ---------- Async PowerShell exec ----------
+function psExec(cmd) {
+  return new Promise((resolve, reject) => {
+    exec(cmd, { encoding: "utf-8", maxBuffer: 10 * 1024 * 1024 }, (err, stdout) => {
+      if (err) reject(err);
+      else resolve(stdout);
+    });
+  });
+}
+
+// Override global fetch: async PowerShell proxy with caching
+globalThis.fetch = async function smartFetch(url) {
+  const cached = cacheGet(url);
+  if (cached) return cached;
+
+  let makeResponse;
+
+  {
+    const result = await psExec(`powershell -NoProfile -File "${psScript}" -Url "${url}"`);
+    if (result.startsWith("IMG_BASE64:")) {
+      const b64 = result.slice("IMG_BASE64:".length).trim();
+      const dataUri = `data:image/jpeg;base64,${b64}`;
+      makeResponse = () => {
+        const text = () => Promise.resolve(dataUri);
+        const json = async () => { throw new Error("Not a JSON response"); };
+        return { ok: true, status: 200, text, json, headers: new Map(), _isImage: true };
+      };
+    } else {
+      makeResponse = () => {
+        const text = () => Promise.resolve(result);
+        const json = () => Promise.resolve(JSON.parse(result));
+        return { ok: true, status: 200, text, json, headers: new Map() };
+      };
+    }
   }
-  const text = () => Promise.resolve(result);
-  const json = () => Promise.resolve(JSON.parse(result));
-  return { ok: true, status: 200, text, json, headers: new Map() };
+
+  const response = makeResponse();
+  cacheSet(url, response);
+  return response;
 };
 
-// Dynamic import so the handler uses the overridden fetch
+// Dynamic import the handler (uses overridden fetch)
 const handlerPromise = import("./api/card.js?" + Date.now());
 
 const server = http.createServer(async (req, res) => {
@@ -61,7 +93,9 @@ const server = http.createServer(async (req, res) => {
         send(b) { res.writeHead(this._c, this._h); res.end(b); },
       };
       const apiReq = { url: u.pathname + u.search, headers: req.headers, method: req.method };
+      const t0 = Date.now();
       await mod.default(apiReq, vres);
+      console.log(` ${u.pathname}${u.search}  ${Date.now() - t0}ms`);
     } catch (e) {
       console.error("API error:", e);
       res.writeHead(500, { "Content-Type": "image/svg+xml" });
@@ -84,3 +118,4 @@ const server = http.createServer(async (req, res) => {
 
 const PORT = parseInt(process.env.PORT || "3456");
 server.listen(PORT, () => console.log(" Dev server: http://localhost:" + PORT));
+

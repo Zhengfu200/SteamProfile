@@ -14,3 +14,4 @@ try {
 } catch {
   Write-Output "{""error"":true,""statusCode"":0,""message"":""$($_.Exception.Message)""}"
 }
+

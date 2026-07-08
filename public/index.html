@@ -1,10 +1,10 @@
- <!DOCTYPE html>
+﻿﻿ <!DOCTYPE html>
  <html lang="en">
  <head>
  <meta charset="UTF-8">
  <meta name="viewport" content="width=device-width, initial-scale=1.0">
  <title>Steam Profile Stats</title>
- <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='28' font-size='28'>🎮</text></svg>">
+ <link rel="icon" type="image/svg+xml" href="/favicon.svg">
  <style>
    *, *::before, *::after {
      box-sizing: border-box;
@@ -21,7 +21,6 @@
      align-items: center;
    }
  
-   /* ─── Header ──────────────────────────────────── */
    header {
      text-align: center;
      padding: 48px 24px 24px;
@@ -47,7 +46,6 @@
      line-height: 1.5;
    }
  
-   /* ─── Main card ───────────────────────────────── */
    .container {
      width: 100%;
      max-width: 600px;
@@ -74,7 +72,6 @@
      margin-bottom: 16px;
    }
  
-   /* ─── Input row ───────────────────────────────── */
    .input-row {
      display: flex;
      gap: 10px;
@@ -115,7 +112,6 @@
    .btn:active { transform: translateY(0); opacity: 0.85; }
    .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
  
-  /* ─── Theme toggle ────────────────────────────── */
   .theme-row {
     display: flex;
     align-items: center;
@@ -198,7 +194,6 @@
   }
 
  
-   /* ─── Preview ─────────────────────────────────── */
    .preview-area {
      display: flex;
      justify-content: center;
@@ -215,7 +210,6 @@
      font-size: 14px;
    }
  
-   /* ─── Embed code ──────────────────────────────── */
    .code-row {
      display: flex;
      gap: 8px;
@@ -247,7 +241,6 @@
    .btn-copy:hover { background: rgba(255,255,255,0.14); }
    .btn-copy.copied { background: #238636; color: #ffffff; }
  
-   /* ─── Footer ──────────────────────────────────── */
    footer {
      text-align: center;
      padding: 24px;
@@ -260,7 +253,6 @@
    }
    footer a:hover { color: #1991ff; }
  
-   /* ─── Loading ─────────────────────────────────── */
    .spinner {
      width: 28px;
      height: 28px;
@@ -271,7 +263,6 @@
    }
    @keyframes spin { to { transform: rotate(360deg); } }
  
-   /* ─── Responsive ──────────────────────────────── */
    @media (max-width: 520px) {
      header { padding: 32px 16px 16px; }
      header h1 { font-size: 28px; }
@@ -290,7 +281,6 @@
  </header>
  
  <main class="container">
-   <!-- Input panel -->
    <div class="panel">
      <h2>Your Steam Profile</h2>
      <div class="input-row">
@@ -302,7 +292,6 @@
      </p>
    </div>
  
-   <!-- Preview panel -->
    <div class="panel" id="previewPanel">
       <div class="theme-row">
         <label>Theme:</label>
@@ -341,11 +330,14 @@
        <label class="opt-switch"><input type="checkbox" id="showGames" checked><span class="slider"></span> Games</label>
        <label class="opt-switch"><input type="checkbox" id="showHours" checked><span class="slider"></span> Hours</label>
        <label class="opt-switch"><input type="checkbox" id="showJoined" checked><span class="slider"></span> Join Date</label>
-       <label class="opt-switch"><input type="checkbox" id="showLocation" checked><span class="slider"></span> Location</label>
+      <label class="opt-switch"><input type="checkbox" id="showLocation" checked><span class="slider"></span> Location</label>
+      <label class="opt-switch"><input type="checkbox" id="showFriends" checked><span class="slider"></span> Friends</label>
+      <label class="opt-switch"><input type="checkbox" id="showStatus" checked><span class="slider"></span> Status</label>
+      <label class="opt-switch"><input type="checkbox" id="showBadges" checked><span class="slider"></span> Badges</label>
+      <label class="opt-switch"><input type="checkbox" id="showRecent" checked><span class="slider"></span> Recent Games</label>
      </div>
    </div>
  
-   <!-- Embed panel -->
    <div class="panel">
      <h2>Embed in GitHub README</h2>
      <div class="code-row">
@@ -377,9 +369,12 @@
      const sg = document.getElementById('showGames');
      const sh = document.getElementById('showHours');
      const sj = document.getElementById('showJoined');
-     const sl = document.getElementById('showLocation');
+    const sl = document.getElementById('showLocation');
+    const sf = document.getElementById('showFriends');
+    const ss = document.getElementById('showStatus');
+    const sb = document.getElementById('showBadges');
+    const sr = document.getElementById('showRecent');
  
-     // ─── Theme toggle ───────────────────────────────
      themeSelect.addEventListener('change', () => {
        currentTheme = themeSelect.value;
        if (lastParam) generateCard(lastParam, true);
@@ -390,12 +385,11 @@
        if (lastParam) generateCard(lastParam, true);
      });
 
-     const optToggles = [sg, sh, sj, sl];
+    const optToggles = [sg, sh, sj, sl, sf, ss, sb, sr];
      optToggles.forEach(t => t.addEventListener('change', () => {
        if (lastParam) generateCard(lastParam, true);
      }));
  
-     // ─── Generate card ──────────────────────────────
      async function generateCard(value, isRetheme) {
        const trimmed = value.trim();
        if (!trimmed) return;
@@ -408,13 +402,11 @@
          embedCode.textContent = 'Generating...';
        }
  
-       // Determine whether it's a steamid (numeric) or vanity URL
        const paramName = /^\d{17}$/.test(trimmed) ? 'steamid' : 'username';
        const cb = Date.now();
-       const showParams = `&show_games=${sg.checked}&show_hours=${sh.checked}&show_joined=${sj.checked}&show_location=${sl.checked}`;
+      const showParams = `&show_games=${sg.checked}&show_hours=${sh.checked}&show_joined=${sj.checked}&show_location=${sl.checked}&show_friends=${sf.checked}&show_status=${ss.checked}&show_badges=${sb.checked}&show_recent=${sr.checked}`;
        const url = `/api/card?${paramName}=${encodeURIComponent(trimmed)}&theme=${currentTheme}&disable_animations=${disableAnimations}${showParams}&_=${cb}`;
  
-       // Build embed markdown
        const baseUrl = window.location.origin;
        const fullUrl = `${baseUrl}/api/card?${paramName}=${encodeURIComponent(trimmed)}&theme=${currentTheme}&disable_animations=${disableAnimations}${showParams}&_=${cb}`;
        const isSteamId = /^\d{17}$/.test(trimmed);
@@ -436,13 +428,11 @@
         isGenerating = false;
         return;
       }
-      // Retheme: just swap the src on the existing img
       const existingImg = previewArea.querySelector('img');
       if (existingImg) existingImg.src = url;
       isGenerating = false;
      }
  
-     // ─── Copy embed code ────────────────────────────
      copyBtn.addEventListener('click', async () => {
        const code = embedCode.textContent;
        if (!code || code === 'Generate a card first' || code === 'Generating...') return;
@@ -456,7 +446,6 @@
            copyBtn.classList.remove('copied');
          }, 2000);
        } catch {
-         // Fallback
          const range = document.createRange();
          range.selectNodeContents(embedCode);
          const sel = window.getSelection();
@@ -465,13 +454,11 @@
        }
      });
  
-     // ─── Generate on button click / Enter key ──────
      generateBtn.addEventListener('click', () => generateCard(inputField.value));
      inputField.addEventListener('keydown', (e) => {
        if (e.key === 'Enter') generateCard(inputField.value);
      });
  
-     // ─── Auto-generate from URL params ─────────────
      (function initFromUrl() {
        const params = new URLSearchParams(window.location.search);
        const val = params.get('steamid') || params.get('username');
@@ -485,3 +472,7 @@
  
  </body>
  </html>
+
+
+
+

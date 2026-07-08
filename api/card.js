@@ -1,7 +1,16 @@
- const STEAM_API_BASE = 'https://api.steampowered.com';
+﻿﻿ const STEAM_API_BASE = 'https://api.steampowered.com';
  const STEAM_CDN = 'https://avatars.steamstatic.com';
- 
- // ─── Color themes ───────────────────────────────────────────────────────────
+
+const STATUS_COLORS = {
+  0: '#8b949e',
+  1: '#2ea043',
+  2: '#f85149',
+  3: '#d29922',
+  4: '#a371f7',
+  5: '#1991ff',
+  6: '#58a6ff',
+};
+
  const THEMES = {
   dark: {
     bg: "#0d1117", cardBg: "#161b22", border: "#30363d",
@@ -103,7 +112,6 @@
 
 
  
- // ─── Steam API helpers ──────────────────────────────────────────────────────
  
  function getApiKey() {
    return process.env.STEAM_API_KEY || '';
@@ -120,6 +128,21 @@ async function resolveVanityUrl(vanityUrl) {
    } catch (e) {
      return null;
    }
+}
+async function resolveVanityUrlRetry(vanityUrl, retries = 2) {
+  const key = getApiKey();
+  const url = `${STEAM_API_BASE}/ISteamUser/ResolveVanityURL/v1/?key=${key}&vanityurl=${encodeURIComponent(vanityUrl)}`;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const res = await fetch(url).then((r) => r.json());
+      if (res.response && res.response.success === 1) return res.response.steamid;
+      if (res.response && res.response.success === 42) return null;
+    } catch (e) {
+      console.error(`resolveVanityUrl attempt ${attempt+1}/${retries+1} failed:`, e.message);
+    }
+    if (attempt < retries) await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
+  }
+  return null;
 }
 
 async function getPlayerSummaries(steamId) {
@@ -139,9 +162,10 @@ async function getPlayerLevel(steamId) {
   const url = `${STEAM_API_BASE}/IPlayerService/GetBadges/v1/?key=${key}&steamid=${steamId}`;
    try {
   const res = await fetch(url).then((r) => r.json());
-  return res.response.player_level || 0;
+  const badges = res.response.badges || [];
+  return { level: res.response.player_level || 0, badgeCount: badges.length };
    } catch (e) {
-     return 0;
+     return { level: 0, badgeCount: 0 };
    }
 }
 
@@ -151,13 +175,33 @@ async function getOwnedGames(steamId) {
    try {
   const res = await fetch(url).then((r) => r.json());
   return res.response || { game_count: 0, games: [] };
-   } catch (e) {
-     return { game_count: 0, games: [] };
-   }
+  } catch (e) {
+    return { game_count: 0, games: [] };
+  }
 }
- 
- // ─── Formatting helpers ─────────────────────────────────────
-// ─── Avatar base64 helper ──────────────────────────────────────────
+
+async function getFriendCount(steamId) {
+  const key = getApiKey();
+  const url = `${STEAM_API_BASE}/ISteamUser/GetFriendList/v1/?key=${key}&steamid=${steamId}&relationship=friend`;
+  try {
+    const res = await fetch(url).then((r) => r.json());
+    return (res.friendslist && res.friendslist.friends || []).length;
+  } catch (e) {
+    return 0;
+  }
+}
+
+async function getRecentlyPlayedGames(steamId, count = 3) {
+  const key = getApiKey();
+  const url = `${STEAM_API_BASE}/IPlayerService/GetRecentlyPlayedGames/v1/?key=${key}&steamid=${steamId}&count=${count}`;
+  try {
+    const res = await fetch(url).then((r) => r.json());
+    return (res.response && res.response.games) || [];
+  } catch (e) {
+    return [];
+  }
+}
+
 
 async function fetchAvatarAsBase64(url) {
   try {
@@ -203,7 +247,6 @@ async function fetchAvatarAsBase64(url) {
    return Math.max(60, Math.min(w, 120));
  }
  
- // ─── SVG Templates ──────────────────────────────────────────────────────────
  
  function renderErrorSvg(message, theme = 'dark') {
    const t = THEMES[theme] || THEMES.dark;
@@ -216,9 +259,9 @@ async function fetchAvatarAsBase64(url) {
  
  function renderCardSvg(data, theme) {
   const t = THEMES[theme] || THEMES.dark;
-  const { name, avatarUrl, level, gameCount, totalMinutes, disableAnimations,
-    showGames, showHours, showJoined, showLocation, joinedYear, locCountry } = data;
-  const noAnim = disableAnimations === true;
+ const { name, avatarUrl, level, gameCount, totalMinutes, disableAnimations,
+   showGames, showHours, showJoined, showLocation, showFriends, showStatus, showBadges, showRecent, personaState, badgeCount, friendCount, recentGames, joinedYear, locCountry } = data;
+ const noAnim = disableAnimations === true;
 
   const W = 340;
   const ax = 68, ay = 48, ar = 24;
@@ -234,18 +277,18 @@ async function fetchAvatarAsBase64(url) {
   if (showGames !== false) items.push({ icon: "&#x1F3AE;", val: gameCountStr, label: "GAMES" });
   if (showHours !== false) items.push({ icon: "&#x23F1;", val: hoursStr, label: "HOURS" });
   if (showJoined === true && joinedYear) items.push({ icon: "&#x1F4C5;", val: joinedYear, label: "JOINED" });
-  if (showLocation === true && locCountry) items.push({ icon: "&#x1F30D;", val: locCountry, label: "COUNTRY" });
+ if (showLocation === true && locCountry) items.push({ icon: "&#x1F30D;", val: locCountry, label: "COUNTRY" });
+ if (showFriends !== false) items.push({ icon: "&#x1F465;", val: friendCount.toLocaleString(), label: "FRIENDS" });
+ if (showBadges !== false) items.push({ icon: "&#x1F3C5;", val: badgeCount.toLocaleString(), label: "BADGES" });
 
   const rows = Math.ceil(items.length / 2);
   const baseY = 102, rowH = 48, lblOff = 15, padAfter = 18;
-  let divY, footY, H;
+  let divY;
   if (rows === 0) {
-    divY = 118; footY = 139; H = 145;
+    divY = 118;
   } else {
     const lastLabelY = baseY + (rows - 1) * rowH + lblOff;
     divY = lastLabelY + padAfter;
-    footY = divY + 21;
-    H = footY + 12;
   }
 
   let statsHtml = "";
@@ -257,6 +300,24 @@ async function fetchAvatarAsBase64(url) {
     <text x="${x + statGap}" y="${y}" fill="${t.title}" font-size="16" font-weight="700">${it.val}</text>
     <text x="${x}" y="${y + lblOff}" fill="${t.muted}" font-size="10" letter-spacing="0.5">${it.label}</text>`;
   });
+
+  let recentHtml = "";
+  if (showRecent !== false && recentGames && recentGames.length > 0) {
+    const recentLabelY = divY + 10;
+    const rowY = recentLabelY + 22;
+    const iconSize = 52, iconGap = 18;
+    const totalW = recentGames.length * iconSize + (recentGames.length - 1) * iconGap;
+    const startX = (W - totalW) / 2;
+    recentHtml = `<text class="as" style="animation-delay:0.24s" x="${W / 2}" y="${recentLabelY}" fill="${t.muted}" font-family="system-ui,-apple-system,sans-serif" font-size="10" text-anchor="middle" letter-spacing="1">RECENTLY PLAYED</text>`;
+    recentGames.forEach((g, i) => {
+      const ix = startX + i * (iconSize + iconGap);
+      recentHtml += `<g class="as" style="animation-delay:${0.26 + i * 0.04}s"><clipPath id="ric${i}"><rect x="${ix}" y="${rowY}" width="${iconSize}" height="${iconSize}" rx="8"/></clipPath><image x="${ix}" y="${rowY}" width="${iconSize}" height="${iconSize}" href="${escapeXml(g.iconDataUri)}" xlink:href="${escapeXml(g.iconDataUri)}" preserveAspectRatio="xMidYMid slice" clip-path="url(#ric${i})"/></g>`;
+    });
+    divY = rowY + iconSize + 16;
+  }
+
+  const footY = divY + 21;
+  const H = footY + 12;
 
   const animCss = noAnim ? "" : `<style>
     @keyframes af{from{opacity:0}to{opacity:1}}
@@ -283,6 +344,11 @@ async function fetchAvatarAsBase64(url) {
     <circle cx="${ax}" cy="${ay}" r="${ar + 2}" fill="none" stroke="${t.accent}" stroke-width="1.5" opacity="0.3"/>
     <circle cx="${ax}" cy="${ay}" r="${ar}" fill="none" stroke="${t.accent}" stroke-width="2"/>
     <image x="${ax - ar}" y="${ay - ar}" width="${ar * 2}" height="${ar * 2}" clip-path="url(#avatarClip)" href="${escapeXml(avatarUrl)}" xlink:href="${escapeXml(avatarUrl)}" preserveAspectRatio="xMidYMid slice"/>
+    ${showStatus !== false ? (() => {
+      const sc = STATUS_COLORS[personaState] || STATUS_COLORS[0];
+      const dx = ax + ar * 0.72, dy = ay + ar * 0.72, dr = 5;
+      return `<circle cx="${dx}" cy="${dy}" r="${dr + 2}" fill="${t.cardBg}"/><circle cx="${dx}" cy="${dy}" r="${dr}" fill="${sc}"/>`;
+    })() : ""}
   </g>
 
   <text class="as" style="animation-delay:0.12s" x="${lx}" y="40" fill="${t.title}" font-family="system-ui,-apple-system,sans-serif" font-size="16" font-weight="700" letter-spacing="-0.3">${escapeXml(username)}</text>
@@ -294,13 +360,14 @@ async function fetchAvatarAsBase64(url) {
 
   ${items.length > 0 ? `<g class="as" style="animation-delay:0.2s">${statsHtml}</g>` : ""}
 
+  ${recentHtml}
+
   <line class="af" style="animation-delay:0.3s" x1="44" y1="${divY}" x2="${W - 44}" y2="${divY}" stroke="${t.border}" stroke-width="1"/>
   <text class="af" style="animation-delay:0.35s" x="${W / 2}" y="${footY}" fill="${t.footer}" font-family="system-ui,-apple-system,sans-serif" font-size="10" text-anchor="middle" letter-spacing="1">STEAM STATS</text>
 </svg>`;
 }
 export { renderCardSvg, renderErrorSvg };
 
-// ─── Vercel serverless handler ──────────────────────────────────────────────
 
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -328,18 +395,21 @@ export default async function handler(req, res) {
   try {
     let resolvedId = steamId;
     if (!resolvedId && username) {
-      resolvedId = await resolveVanityUrl(username);
+     resolvedId = await resolveVanityUrlRetry(username);
+     // Retry version handles transient PowerShell/network failures
       if (!resolvedId) {
         res.setHeader("Content-Type", "image/svg+xml");
         return res.status(200).send(renderErrorSvg(`User "${escapeXml(username)}" not found`, theme));
       }
     }
 
-    const [summary, levelData, gamesData] = await Promise.all([
+    const [summary, badgeData, gamesData, friendCount, recentGamesRaw] = await Promise.all([
       getPlayerSummaries(resolvedId),
       getPlayerLevel(resolvedId),
-      getOwnedGames(resolvedId),
-    ]);
+     getOwnedGames(resolvedId),
+     getFriendCount(resolvedId),
+     getRecentlyPlayedGames(resolvedId, 3),
+   ]);
 
     if (!summary) {
       res.setHeader("Content-Type", "image/svg+xml");
@@ -353,10 +423,24 @@ export default async function handler(req, res) {
     const avatarSrc = summary.avatarfull || `${STEAM_CDN}/full.jpg`;
     const avatarDataUri = await fetchAvatarAsBase64(avatarSrc);
 
+    const recentGames = await Promise.all(
+      (recentGamesRaw || []).slice(0, 3).map(async (g) => ({
+        name: g.name || "Unknown",
+        playtime_2weeks: g.playtime_2weeks || 0,
+        iconDataUri: g.img_icon_url
+          ? await fetchAvatarAsBase64(`https://media.steampowered.com/steamcommunity/public/images/apps/${g.appid}/${g.img_icon_url}.jpg`)
+          : "",
+      }))
+    );
+
     const showGames = searchParams.get("show_games") !== "false";
     const showHours = searchParams.get("show_hours") !== "false";
     const showJoined = searchParams.get("show_joined") === "true";
-    const showLocation = searchParams.get("show_location") === "true";
+   const showLocation = searchParams.get("show_location") === "true";
+    const showFriends = searchParams.get("show_friends") !== "false";
+    const showStatus = searchParams.get("show_status") !== "false";
+    const showBadges = searchParams.get("show_badges") !== "false";
+    const showRecent = searchParams.get("show_recent") !== "false";
 
     const joinedYear = summary.timecreated ? new Date(summary.timecreated * 1000).getFullYear().toString() : null;
     const locCountry = summary.loccountrycode || null;
@@ -364,16 +448,24 @@ export default async function handler(req, res) {
     const cardData = {
       name: summary.personaname || "Unknown",
       avatarUrl: avatarDataUri,
-      level: levelData,
+      level: badgeData.level,
+      badgeCount: badgeData.badgeCount || 0,
+      showBadges,
+      showRecent,
+      recentGames,
       gameCount: gamesData.game_count || 0,
       totalMinutes,
       disableAnimations,
       showGames,
       showHours,
       showJoined,
-      showLocation,
-      joinedYear,
+     showLocation,
+     showFriends,
+     friendCount,
+     joinedYear,
       locCountry,
+      personaState: summary.personastate ?? 0,
+      showStatus,
       steamId: resolvedId,
     };
 
@@ -386,3 +478,5 @@ export default async function handler(req, res) {
     res.status(200).send(renderErrorSvg("Failed to fetch Steam data", theme));
   }
 }
+
+
