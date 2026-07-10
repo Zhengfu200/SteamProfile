@@ -335,6 +335,7 @@
       <label class="opt-switch"><input type="checkbox" id="showStatus" checked><span class="slider"></span> Status</label>
       <label class="opt-switch"><input type="checkbox" id="showBadges" checked><span class="slider"></span> Badges</label>
       <label class="opt-switch"><input type="checkbox" id="showRecent" checked><span class="slider"></span> Recent Games</label>
+      <label class="opt-switch"><input type="checkbox" id="showMostPlayed" checked><span class="slider"></span> Most Played</label>
      </div>
    </div>
  
@@ -374,6 +375,7 @@
     const ss = document.getElementById('showStatus');
     const sb = document.getElementById('showBadges');
     const sr = document.getElementById('showRecent');
+    const sm = document.getElementById('showMostPlayed');
  
      themeSelect.addEventListener('change', () => {
        currentTheme = themeSelect.value;
@@ -385,7 +387,7 @@
        if (lastParam) generateCard(lastParam, true);
      });
 
-    const optToggles = [sg, sh, sj, sl, sf, ss, sb, sr];
+    const optToggles = [sg, sh, sj, sl, sf, ss, sb, sr, sm];
      optToggles.forEach(t => t.addEventListener('change', () => {
        if (lastParam) generateCard(lastParam, true);
      }));
@@ -404,7 +406,7 @@
  
        const paramName = /^\d{17}$/.test(trimmed) ? 'steamid' : 'username';
        const cb = Date.now();
-      const showParams = `&show_games=${sg.checked}&show_hours=${sh.checked}&show_joined=${sj.checked}&show_location=${sl.checked}&show_friends=${sf.checked}&show_status=${ss.checked}&show_badges=${sb.checked}&show_recent=${sr.checked}`;
+      const showParams = `&show_games=${sg.checked}&show_hours=${sh.checked}&show_joined=${sj.checked}&show_location=${sl.checked}&show_friends=${sf.checked}&show_status=${ss.checked}&show_badges=${sb.checked}&show_recent=${sr.checked}&show_most_played=${sm.checked}`;
        const url = `/api/card?${paramName}=${encodeURIComponent(trimmed)}&theme=${currentTheme}&disable_animations=${disableAnimations}${showParams}&_=${cb}`;
  
        const baseUrl = window.location.origin;

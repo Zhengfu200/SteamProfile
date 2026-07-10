@@ -142,7 +142,68 @@ async function resolveVanityUrlRetry(vanityUrl, retries = 2) {
     }
     if (attempt < retries) await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
   }
-  return null;
+
+  try {
+    const fallbackUrl = `https://steamcommunity.com/id/${encodeURIComponent(vanityUrl)}/?xml=1`;
+    const xmlRes = await fetch(fallbackUrl);
+    const xmlText = await xmlRes.text();
+    const match = xmlText.match(/<steamID64>(.*?)<\/steamID64>/s);
+    return match ? match[1].trim() : null;
+  } catch (e) {
+    console.error("resolveVanityUrl fallback failed:", e.message);
+    return null;
+  }
+}
+
+async function getPublicProfileFallback(steamId) {
+  try {
+    const profileUrl = `https://steamcommunity.com/profiles/${steamId}/?xml=1`;
+    const res = await fetch(profileUrl);
+    const xmlText = await res.text();
+
+    const getTag = (tag) => {
+      const pattern = new RegExp(`<${tag}>([\\s\\S]*?)<\\/${tag}>`);
+      const match = xmlText.match(pattern);
+      if (!match) return null;
+      const value = match[1].trim();
+      return value.replace(/<!\[CDATA\[(.*?)\]\]>/gs, "$1");
+    };
+
+    const getTagWithCdata = (tag) => {
+      const pattern = new RegExp(`<${tag}><!\\[CDATA\\[(.*?)\\]\\]><\\/${tag}>`, "s");
+      const match = xmlText.match(pattern);
+      return match ? match[1].trim() : getTag(tag);
+    };
+
+    const steamId64 = getTagWithCdata("steamID64") || steamId;
+    const personaname = getTagWithCdata("steamID") || getTagWithCdata("steamID64");
+    const avatarUrl = getTagWithCdata("avatarFull") || getTagWithCdata("avatarMedium") || getTagWithCdata("avatarIcon");
+    const privacyState = getTag("privacyState");
+    if (privacyState && privacyState.toLowerCase() !== "public") return null;
+
+    const onlineState = getTag("onlineState");
+    const statusMap = {
+      online: 1,
+      busy: 2,
+      away: 3,
+      snooze: 4,
+      lookingtosearch: 5,
+      lookingtotrade: 6,
+      offline: 0,
+    };
+
+    return {
+      personaname: personaname || "Unknown",
+      avatarfull: avatarUrl || `${STEAM_CDN}/full.jpg`,
+      personastate: statusMap[onlineState && onlineState.toLowerCase()] ?? 0,
+      timecreated: null,
+      loccountrycode: null,
+      steamid: steamId64,
+    };
+  } catch (e) {
+    console.error("getPublicProfileFallback failed:", e.message);
+    return null;
+  }
 }
 
 async function getPlayerSummaries(steamId) {
@@ -151,10 +212,11 @@ async function getPlayerSummaries(steamId) {
    try {
   const res = await fetch(url).then((r) => r.json());
   const players = res.response.players;
-  return players && players.length > 0 ? players[0] : null;
+  if (players && players.length > 0) return players[0];
    } catch (e) {
-     return null;
+     console.error("getPlayerSummaries failed:", e.message);
    }
+   return getPublicProfileFallback(steamId);
 }
 
 async function getPlayerLevel(steamId) {
@@ -257,10 +319,27 @@ async function fetchAvatarAsBase64(url) {
  </svg>`;
  }
  
+ function renderGameSection(title, games, theme, width, startY, idPrefix) {
+   if (!games || games.length === 0) return { html: "", nextY: startY };
+   const t = theme;
+   const labelY = startY + 10;
+   const rowY = labelY + 22;
+   const iconSize = 52;
+   const iconGap = 18;
+   const totalW = games.length * iconSize + (games.length - 1) * iconGap;
+   const startX = (width - totalW) / 2;
+   let html = `<text class="as" style="animation-delay:0.24s" x="${width / 2}" y="${labelY}" fill="${t.muted}" font-family="system-ui,-apple-system,sans-serif" font-size="10" text-anchor="middle" letter-spacing="1">${title}</text>`;
+   games.forEach((g, i) => {
+     const ix = startX + i * (iconSize + iconGap);
+     html += `<g class="as" style="animation-delay:${0.26 + i * 0.04}s"><clipPath id="${idPrefix}${i}"><rect x="${ix}" y="${rowY}" width="${iconSize}" height="${iconSize}" rx="8"/></clipPath><image x="${ix}" y="${rowY}" width="${iconSize}" height="${iconSize}" href="${escapeXml(g.iconDataUri)}" xlink:href="${escapeXml(g.iconDataUri)}" preserveAspectRatio="xMidYMid slice" clip-path="url(#${idPrefix}${i})"/></g>`;
+   });
+   return { html, nextY: rowY + iconSize + 16 };
+ }
+ 
  function renderCardSvg(data, theme) {
   const t = THEMES[theme] || THEMES.dark;
  const { name, avatarUrl, level, gameCount, totalMinutes, disableAnimations,
-   showGames, showHours, showJoined, showLocation, showFriends, showStatus, showBadges, showRecent, personaState, badgeCount, friendCount, recentGames, joinedYear, locCountry } = data;
+   showGames, showHours, showJoined, showLocation, showFriends, showStatus, showBadges, showRecent, showMostPlayed, personaState, badgeCount, friendCount, recentGames, mostPlayedGames, joinedYear, locCountry } = data;
  const noAnim = disableAnimations === true;
 
   const W = 340;
@@ -302,19 +381,18 @@ async function fetchAvatarAsBase64(url) {
   });
 
   let recentHtml = "";
+  let sectionY = divY;
   if (showRecent !== false && recentGames && recentGames.length > 0) {
-    const recentLabelY = divY + 10;
-    const rowY = recentLabelY + 22;
-    const iconSize = 52, iconGap = 18;
-    const totalW = recentGames.length * iconSize + (recentGames.length - 1) * iconGap;
-    const startX = (W - totalW) / 2;
-    recentHtml = `<text class="as" style="animation-delay:0.24s" x="${W / 2}" y="${recentLabelY}" fill="${t.muted}" font-family="system-ui,-apple-system,sans-serif" font-size="10" text-anchor="middle" letter-spacing="1">RECENTLY PLAYED</text>`;
-    recentGames.forEach((g, i) => {
-      const ix = startX + i * (iconSize + iconGap);
-      recentHtml += `<g class="as" style="animation-delay:${0.26 + i * 0.04}s"><clipPath id="ric${i}"><rect x="${ix}" y="${rowY}" width="${iconSize}" height="${iconSize}" rx="8"/></clipPath><image x="${ix}" y="${rowY}" width="${iconSize}" height="${iconSize}" href="${escapeXml(g.iconDataUri)}" xlink:href="${escapeXml(g.iconDataUri)}" preserveAspectRatio="xMidYMid slice" clip-path="url(#ric${i})"/></g>`;
-    });
-    divY = rowY + iconSize + 16;
+    const recentSection = renderGameSection("RECENTLY PLAYED", recentGames, t, W, sectionY, "ric");
+    recentHtml += recentSection.html;
+    sectionY = recentSection.nextY;
   }
+  if (showMostPlayed !== false && mostPlayedGames && mostPlayedGames.length > 0) {
+    const mostPlayedSection = renderGameSection("MOST PLAYED", mostPlayedGames, t, W, sectionY, "mic");
+    recentHtml += mostPlayedSection.html;
+    sectionY = mostPlayedSection.nextY;
+  }
+  divY = sectionY;
 
   const footY = divY + 21;
   const H = footY + 12;
@@ -433,6 +511,21 @@ export default async function handler(req, res) {
       }))
     );
 
+    const topPlayedGames = [...(gamesData.games || [])]
+      .filter((g) => g && g.appid)
+      .sort((a, b) => (b.playtime_forever || 0) - (a.playtime_forever || 0))
+      .slice(0, 3);
+
+    const mostPlayedGames = await Promise.all(
+      topPlayedGames.map(async (g) => ({
+        name: g.name || "Unknown",
+        playtime_forever: g.playtime_forever || 0,
+        iconDataUri: g.img_icon_url
+          ? await fetchAvatarAsBase64(`https://media.steampowered.com/steamcommunity/public/images/apps/${g.appid}/${g.img_icon_url}.jpg`)
+          : "",
+      }))
+    );
+
     const showGames = searchParams.get("show_games") !== "false";
     const showHours = searchParams.get("show_hours") !== "false";
     const showJoined = searchParams.get("show_joined") === "true";
@@ -441,6 +534,7 @@ export default async function handler(req, res) {
     const showStatus = searchParams.get("show_status") !== "false";
     const showBadges = searchParams.get("show_badges") !== "false";
     const showRecent = searchParams.get("show_recent") !== "false";
+    const showMostPlayed = searchParams.get("show_most_played") !== "false";
 
     const joinedYear = summary.timecreated ? new Date(summary.timecreated * 1000).getFullYear().toString() : null;
     const locCountry = summary.loccountrycode || null;
@@ -452,7 +546,9 @@ export default async function handler(req, res) {
       badgeCount: badgeData.badgeCount || 0,
       showBadges,
       showRecent,
+      showMostPlayed,
       recentGames,
+      mostPlayedGames,
       gameCount: gamesData.game_count || 0,
       totalMinutes,
       disableAnimations,

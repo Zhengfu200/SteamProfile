@@ -4,19 +4,23 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { exec } from "node:child_process";
 
-// Load .env
-const envTxt = fs.readFileSync(".env", "utf8").replace(/\r/g, "");
-for (const line of envTxt.split("\n")) {
-  const t = line.trim();
-  if (t && !t.startsWith("#")) {
-    const eq = t.indexOf("=");
-    if (eq > 0) process.env[t.slice(0, eq).trim()] = t.slice(eq + 1).trim();
-  }
-}
-
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const envPath = path.join(__dirname, ".env");
 const pubDir = path.join(__dirname, "public");
 const psScript = path.join(__dirname, "steam-fetch.ps1");
+
+function loadEnv() {
+  if (!fs.existsSync(envPath)) return;
+  const envTxt = fs.readFileSync(envPath, "utf8").replace(/\r/g, "");
+  for (const line of envTxt.split("\n")) {
+    const t = line.trim();
+    if (t && !t.startsWith("#")) {
+      const eq = t.indexOf("=");
+      if (eq > 0) process.env[t.slice(0, eq).trim()] = t.slice(eq + 1).trim();
+    }
+  }
+}
+loadEnv();
 
 const MIME = {
   ".html": "text/html; charset=utf-8",
@@ -35,6 +39,11 @@ function cacheGet(key) {
   return undefined;
 }
 function cacheSet(key, val) { cache.set(key, { ts: Date.now(), val }); }
+function buildResponseFromPayload(payload, status = 200, contentType = "application/octet-stream") {
+  const headers = new Headers();
+  headers.set("content-type", contentType);
+  return new Response(payload, { status, headers });
+}
 
 // ---------- Async PowerShell exec ----------
 function psExec(cmd) {
@@ -46,35 +55,40 @@ function psExec(cmd) {
   });
 }
 
-// Override global fetch: async PowerShell proxy with caching
-globalThis.fetch = async function smartFetch(url) {
+const nativeFetch = globalThis.fetch.bind(globalThis);
+const usePowerShellProxy = process.platform === "win32" || Boolean(process.env.PWSH || process.env.POWERSHELL_DISTRIBUTION_CHANNEL);
+
+// Override global fetch: async PowerShell proxy with caching, but fall back to native fetch on Linux.
+globalThis.fetch = async function smartFetch(input, init) {
+  const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
   const cached = cacheGet(url);
-  if (cached) return cached;
+  if (cached) {
+    return buildResponseFromPayload(cached.payload, cached.status, cached.contentType);
+  }
 
-  let makeResponse;
+  let payload;
+  let status = 200;
+  let contentType = "application/octet-stream";
 
-  {
+  if (usePowerShellProxy) {
     const result = await psExec(`powershell -NoProfile -File "${psScript}" -Url "${url}"`);
     if (result.startsWith("IMG_BASE64:")) {
       const b64 = result.slice("IMG_BASE64:".length).trim();
-      const dataUri = `data:image/jpeg;base64,${b64}`;
-      makeResponse = () => {
-        const text = () => Promise.resolve(dataUri);
-        const json = async () => { throw new Error("Not a JSON response"); };
-        return { ok: true, status: 200, text, json, headers: new Map(), _isImage: true };
-      };
+      payload = `data:image/jpeg;base64,${b64}`;
+      contentType = "text/plain";
     } else {
-      makeResponse = () => {
-        const text = () => Promise.resolve(result);
-        const json = () => Promise.resolve(JSON.parse(result));
-        return { ok: true, status: 200, text, json, headers: new Map() };
-      };
+      payload = result;
+      contentType = "application/json";
     }
+  } else {
+    const response = await nativeFetch(input, init);
+    status = response.status;
+    contentType = response.headers.get("content-type") || "application/octet-stream";
+    payload = await response.arrayBuffer();
   }
 
-  const response = makeResponse();
-  cacheSet(url, response);
-  return response;
+  cacheSet(url, { payload, status, contentType });
+  return buildResponseFromPayload(payload, status, contentType);
 };
 
 // Dynamic import the handler (uses overridden fetch)
